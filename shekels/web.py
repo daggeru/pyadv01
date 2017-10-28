@@ -7,6 +7,8 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm.exc import NoResultFound
 
+from passlib.hash import pbkdf2_sha256
+
 from shekels.forms import ExpenseForm, LoginForm, RegisterForm
 
 import logging
@@ -44,6 +46,7 @@ class User(db.Model, UserMixin):
     login = db.Column(db.String)
     full_name = db.Column(db.String)
     password = db.Column(db.String)
+    profile = db.Column(db.String, nullable=True)
 
     # = db.relationship("Child", back_populates="parent")
 
@@ -80,7 +83,7 @@ def login():
         except NoResultFound:
             flash(message='bad login')
         else:
-            if user.password == form.password.data:
+            if pbkdf2_sha256.verify(form.password.data, user.password):
                 login_user(user)
                 flash('Welcome {}!'.format(user.login))
                 app.logger.log(10, 'Logged user {}'.format(user.login))
@@ -141,10 +144,11 @@ def add():
 def register():
     form = RegisterForm()
     if form.validate_on_submit():
+        secret = pbkdf2_sha256.hash(form.password.data)
         user = User(
             login=form.login.data,
             full_name=form.full_name.data,
-            password=form.password.data
+            password=secret
         )
         db.session.add(user)
         db.session.commit()
